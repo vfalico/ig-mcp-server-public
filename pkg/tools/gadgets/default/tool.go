@@ -183,10 +183,17 @@ func gadgetsTool(env string, info *api.GadgetInfo) (mcp.Tool, error) {
 
 	toolParams := make(map[string]interface{})
 	for _, p := range info.Params {
-		toolParams[p.Prefix+p.Key] = map[string]interface{}{
+		schema := map[string]interface{}{
 			"type":        "string",
 			"description": p.Description,
 		}
+		// Surface the gadget param's possibleValues as a JSON-schema enum so
+		// an MCP client can DISCOVER the valid choices from the
+		// tool schema alone, not just prose (capability discoverability).
+		if pv := p.GetPossibleValues(); len(pv) > 0 {
+			schema["enum"] = pv
+		}
+		toolParams[p.Prefix+p.Key] = schema
 	}
 
 	tool := createMCPTool(metadata.Name, description, toolParams)
@@ -236,7 +243,8 @@ func createMCPTool(name, description string, params map[string]interface{}) mcp.
 			mcp.Properties(params),
 		),
 		mcp.WithNumber("duration",
-			mcp.Description("Duration in seconds to run the gadget. Use 0 to run in background/continuously."),
+			mcp.Description("Seconds to run the gadget as a SINGLE BLOCKING call that does not return until the window elapses. IMPORTANT: a large duration blocks the MCP request for the whole window and can exceed the client request budget, surfacing as a "+
+				"'-32001 request timed out' error even though the gadget itself is healthy and still running. For long traces prefer duration=0 to start the gadget in the BACKGROUND (returns a gadget ID immediately), then poll get_results by that ID; or keep a blocking duration short (e.g. <=30s)."),
 		),
 	}
 

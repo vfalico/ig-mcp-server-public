@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/inspektor-gadget/inspektor-gadget/pkg/gadget-service/api"
@@ -50,6 +52,17 @@ func gadgetHandler(mgr gadgetmanager.GadgetManager, info *api.GadgetInfo) server
 				for k, v := range p {
 					if strVal, ok := v.(string); ok {
 						params[k] = strVal
+						// An EXPLICIT caller max-entries<0 is the ONLY thing that lifts the
+						// server-side 64KB transport cap. Signal it via a server-internal
+						// sentinel; the gadget DEFAULT max-entries=-1 (seeded on every call
+						// because the limiter operator requires the param present) must NOT
+						// count, or every call would marshal the full (~300MB) stream and
+						// wedge the MCP transport.
+						if k == "operator.limiter.max-entries" {
+							if n, err := strconv.Atoi(strings.TrimSpace(strVal)); err == nil && n < 0 {
+								params[gadgetmanager.TransportUncapKey] = "true"
+							}
+						}
 					} else {
 						return nil, fmt.Errorf("invalid type for parameter %s: expected string, got %T", k, v)
 					}
