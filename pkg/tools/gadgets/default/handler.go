@@ -73,6 +73,9 @@ func gadgetHandler(mgr gadgetmanager.GadgetManager, info *api.GadgetInfo) server
 		if background {
 			id, err := mgr.RunDetached(info.ImageName, params)
 			if err != nil {
+				if isKprobeAttachFailure(err) {
+					return mcp.NewToolResultText(kprobeAttachDiagnostic(info.ImageName, err)), nil
+				}
 				return nil, fmt.Errorf("running gadget: %w", err)
 			}
 			return mcp.NewToolResultText(fmt.Sprintf("The gadget has been started with ID %s.", id)), nil
@@ -81,6 +84,14 @@ func gadgetHandler(mgr gadgetmanager.GadgetManager, info *api.GadgetInfo) server
 		log.Debug("Running gadget", "image", info.ImageName, "params", params, "duration", duration)
 		resp, err := mgr.Run(info.ImageName, params, duration)
 		if err != nil {
+			// A kprobe/kretprobe symbol-attach failure (tracefs EINVAL) is a
+			// client-actionable input error, not an internal fault. Return a
+			// structured hint naming the un-attachable symbol so the agent can
+			// pivot instead of receiving an opaque -32603 and retrying the same
+			// symbol (seen with a gcc .constprop clone).
+			if isKprobeAttachFailure(err) {
+				return mcp.NewToolResultText(kprobeAttachDiagnostic(info.ImageName, err)), nil
+			}
 			return nil, fmt.Errorf("starting gadget %s: %w", info.ImageName, err)
 		}
 		return mcp.NewToolResultText(resp), nil
