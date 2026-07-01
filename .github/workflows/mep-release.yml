@@ -1,0 +1,88 @@
+name: MEP release (ig-mcp-server binary)
+
+# Publishes the patched, static `ig-mcp-server` per arch as GitHub Release
+# assets so a target box needs no Go toolchain to run MEP.
+#
+# The binary is linked against the PATCHED Inspektor Gadget client (mep branch)
+# to pick up the gRPC max-recv fix required for large one-shot results such as
+# `list_attachable`. This mirrors install.sh's PATCHED_CLIENT=1 path (a build-
+# time `go mod edit -replace`, never committed to the branch).
+#
+# Trigger by pushing a tag like `mep-2026.07.01` (or manually via the Actions tab).
+
+on:
+  push:
+    tags:
+      - 'mep-*'
+  workflow_dispatch:
+    inputs:
+      ig_ref:
+        description: 'Branch/tag of vfalico/inspektor-gadget-public to link against'
+        required: false
+        default: 'mep'
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: '1.26.4'
+  IG_REPO: vfalico/inspektor-gadget-public
+
+jobs:
+  build:
+    name: Build static ig-mcp-server (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # attach the tarball to the release
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [ amd64, arm64 ]
+    steps:
+      - name: Checkout ig-mcp-server
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Checkout patched Inspektor Gadget (mep)
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.IG_REPO }}
+          ref: ${{ github.event.inputs.ig_ref || 'mep' }}
+          path: _ig
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      # Link against the local patched IG (gRPC max-recv fix). Applied only in
+      # CI; the checkout is ephemeral so the branch stays pristine.
+      - name: Point the IG dependency at the patched source
+        run: go mod edit -replace github.com/inspektor-gadget/inspektor-gadget=./_ig
+      # withoutebpf => pure client; CGO_ENABLED=0 => static, cross-compiles with
+      # no QEMU (no cgo). GOARCH selects the target arch.
+      - name: Build ig-mcp-server
+        env:
+          GOFLAGS: -mod=mod
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          go build -tags withoutebpf -ldflags "-extldflags '-static'" \
+            -o ig-mcp-server ./cmd/ig-mcp-server
+      - name: Package tarball
+        run: |
+          tar -czf "ig-mcp-server-mep-linux-${{ matrix.arch }}.tar.gz" ig-mcp-server
+          sha256sum "ig-mcp-server-mep-linux-${{ matrix.arch }}.tar.gz" > "ig-mcp-server-mep-linux-${{ matrix.arch }}.tar.gz.sha256"
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ig-mcp-server-mep-linux-${{ matrix.arch }}
+          path: |
+            ig-mcp-server-mep-linux-${{ matrix.arch }}.tar.gz
+            ig-mcp-server-mep-linux-${{ matrix.arch }}.tar.gz.sha256
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ig-mcp-server-mep-linux-${{ matrix.arch }}.tar.gz
+            ig-mcp-server-mep-linux-${{ matrix.arch }}.tar.gz.sha256
