@@ -98,11 +98,17 @@ func fetchGadgetInfosConcurrently(ctx context.Context, mgr gadgetmanager.GadgetM
 }
 
 func versionedImage(mgr gadgetmanager.GadgetManager, img string) string {
-	version, err := mgr.GetVersion()
+	named, err := reference.ParseNamed(img)
 	if err != nil {
 		return img
 	}
-	named, err := reference.ParseNamed(img)
+	// Respect an explicitly-provided tag (e.g. a custom "…/mcp_ebpf_proxy:mep"
+	// gadget served from a private registry). Only untagged references are
+	// pinned to the server version, matching the official version-tagged gadgets.
+	if _, ok := named.(reference.Tagged); ok {
+		return img
+	}
+	version, err := mgr.GetVersion()
 	if err != nil {
 		return img
 	}

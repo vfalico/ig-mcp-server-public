@@ -34,6 +34,12 @@ func gadgetHandler(mgr gadgetmanager.GadgetManager, info *api.GadgetInfo) server
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		duration := 10 * time.Second
 		params := defaultParamsFromGadgetInfo(info)
+		// MEP is a host-observability gadget. Default LocalManager to host mode
+		// ("show data from both the host and containers") BEFORE merging caller
+		// args, so it stays overridable. Without this, on a box with no container
+		// runtime the gadget's seeded host=false makes every run FAIL at pre-start
+		// with "container-collection isn't available".
+		params["operator.LocalManager.host"] = "true"
 		args := request.GetArguments()
 		background := false
 		if args != nil {
