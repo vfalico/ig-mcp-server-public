@@ -20,7 +20,9 @@ const ociPullMissing = "missing"
 func defaultParamsFromGadgetInfo(info *api.GadgetInfo) map[string]string {
 	params := make(map[string]string)
 	for _, p := range info.Params {
-		params[p.Prefix+p.Key] = p.DefaultValue
+		if p.DefaultValue != "" {
+			params[p.Prefix+p.Key] = p.DefaultValue
+		}
 	}
 	// ig-mcp-server serves a fixed, locally-built gadget image that is never
 	// pushed to a registry. Without an explicit pull policy the gRPC runtime

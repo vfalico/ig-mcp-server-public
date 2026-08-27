@@ -55,23 +55,8 @@ func gadgetHandler(mgr gadgetmanager.GadgetManager, info *api.GadgetInfo) server
 			}
 			// If params is provided, merge it with the default parameters
 			if p, ok := args["params"].(map[string]interface{}); ok {
-				for k, v := range p {
-					if strVal, ok := v.(string); ok {
-						params[k] = strVal
-						// An EXPLICIT caller max-entries<0 is the ONLY thing that lifts the
-						// server-side 64KB transport cap. Signal it via a server-internal
-						// sentinel; the gadget DEFAULT max-entries=-1 (seeded on every call
-						// because the limiter operator requires the param present) must NOT
-						// count, or every call would marshal the full (~300MB) stream and
-						// wedge the MCP transport.
-						if k == "operator.limiter.max-entries" {
-							if n, err := strconv.Atoi(strings.TrimSpace(strVal)); err == nil && n < 0 {
-								params[gadgetmanager.TransportUncapKey] = "true"
-							}
-						}
-					} else {
-						return nil, fmt.Errorf("invalid type for parameter %s: expected string, got %T", k, v)
-					}
+				if err := mergeGadgetParams(params, p); err != nil {
+					return nil, err
 				}
 			}
 		}
@@ -102,4 +87,29 @@ func gadgetHandler(mgr gadgetmanager.GadgetManager, info *api.GadgetInfo) server
 		}
 		return mcp.NewToolResultText(resp), nil
 	}
+}
+
+func mergeGadgetParams(params map[string]string, supplied map[string]interface{}) error {
+	for k, v := range supplied {
+		strVal, ok := v.(string)
+		if !ok {
+			return fmt.Errorf("invalid type for parameter %s: expected string, got %T", k, v)
+		}
+		// MCP clients commonly materialize every optional string property as "".
+		// Treat that as omitted so an inactive operator does not receive an
+		// invalid explicit value (for example limiter.max-entries="").
+		if strVal == "" {
+			continue
+		}
+		params[k] = strVal
+		// An EXPLICIT caller max-entries<0 is the ONLY thing that lifts the
+		// server-side 64KB transport cap. Signal it via a server-internal
+		// sentinel; the gadget DEFAULT max-entries=-1 must NOT count.
+		if k == "operator.limiter.max-entries" {
+			if n, err := strconv.Atoi(strings.TrimSpace(strVal)); err == nil && n < 0 {
+				params[gadgetmanager.TransportUncapKey] = "true"
+			}
+		}
+	}
+	return nil
 }
