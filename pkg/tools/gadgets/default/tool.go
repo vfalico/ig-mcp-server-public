@@ -250,7 +250,7 @@ func createMCPTool(name, description string, params map[string]interface{}) mcp.
 		),
 		mcp.WithNumber("duration",
 			mcp.Description("Seconds to run the gadget as a SINGLE BLOCKING call that does not return until the window elapses. IMPORTANT: a large duration blocks the MCP request for the whole window and can exceed the client request budget, surfacing as a "+
-				"'-32001 request timed out' error even though the gadget itself is healthy and still running. For long traces prefer duration=0 to start the gadget in the BACKGROUND (returns a gadget ID immediately), then poll get_results by that ID; or keep a blocking duration short (e.g. <=30s)."),
+				"'-32001 request timed out' error even though the gadget itself is healthy and still running. The workload must already be active during a blocking capture. duration=0 starts the gadget in the BACKGROUND and returns its ID; call get_results while the workload is still active because streaming events emitted before retrieval may not be replayed. Stop every detached gadget by exact ID. Keep blocking durations short (e.g. <=30s)."),
 		),
 	}
 
