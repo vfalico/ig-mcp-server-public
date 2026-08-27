@@ -37,6 +37,9 @@ func TestTopGroups_AggregatesOverFullPreTruncationSet(t *testing.T) {
 	if !strings.Contains(got, `<topGroups key="op"`) {
 		t.Fatalf("expected group_by=op topGroups table; got: %.300q", got)
 	}
+	if !strings.Contains(got, "<aggregateComplete>true</aggregateComplete>") {
+		t.Fatalf("full-set aggregate must be distinguished from the truncated raw sample: %.500q", got)
+	}
 	// THE item-(c) assertion: full-set counts, not survivor counts.
 	if !strings.Contains(got, "op=alpha count=600") {
 		t.Fatalf("item(c) VIOLATED: alpha must count 600 over the FULL pre-truncation set "+

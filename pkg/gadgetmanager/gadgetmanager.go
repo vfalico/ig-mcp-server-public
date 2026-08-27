@@ -834,6 +834,13 @@ func topGroupsSummary(results string, forced string, capability string) string {
 	return b.String()
 }
 
+func markAggregateComplete(summary string) string {
+	if summary == "" {
+		return ""
+	}
+	return summary + "<aggregateComplete>true</aggregateComplete>\n"
+}
+
 // groupableFields scans the newline-delimited JSON records and returns a
 // comma-separated, de-duplicated list of the field names an client can pass to
 // group_by= in this window: every top-level scalar key plus the resolvable
@@ -987,7 +994,7 @@ func truncateResultsKeep(results string, latest bool, groupBy string, capability
 		// had to parse raw records to answer "which syscall/op/pid dominates?".
 		// The unscoped/ungrouped small-result case is unchanged (legacy output).
 		if _, hasKey := capabilityGroupKey[capability]; groupBy != "" || hasKey {
-			if tg := topGroupsSummary(results, groupBy, capability); tg != "" {
+			if tg := markAggregateComplete(topGroupsSummary(results, groupBy, capability)); tg != "" {
 				return fmt.Sprintf("\n%s<results>%s</results>\n", tg, results)
 			}
 			// Fix (review feedback): the caller EXPLICITLY
@@ -1039,7 +1046,7 @@ func truncateResultsKeep(results string, latest bool, groupBy string, capability
 				"records by %s (largest first; %d dropped); this is the heavy-"+
 				"hitter slice, not the newest — re-run with a tighter filter to "+
 				"see more", keptRecords, totalRecords, keepBy, dropped)
-			topGroups := topGroupsSummary(results, groupBy, capability)
+			topGroups := markAggregateComplete(topGroupsSummary(results, groupBy, capability))
 			inFamilyKept := capabilityInFamilyCount(truncated, capability)
 			return fmt.Sprintf("\n<isTruncated>true</isTruncated>\n"+
 				"<retention>top-by:%s</retention>\n"+
@@ -1104,7 +1111,7 @@ func truncateResultsKeep(results string, latest bool, groupBy string, capability
 		"(c) re-run with a tighter filter (pid=, syscall=, or a capability *_op= "+
 		"selector)", which, keptRecords, totalRecords, dropped, totalRecords, which)
 
-	topGroups := topGroupsSummary(results, groupBy, capability)
+	topGroups := markAggregateComplete(topGroupsSummary(results, groupBy, capability))
 	inFamilyKept := capabilityInFamilyCount(truncated, capability)
 	return fmt.Sprintf("\n<isTruncated>true</isTruncated>\n"+
 		"%s"+
