@@ -51,6 +51,7 @@ func New(version string, registry *tools.GadgetToolRegistry) *Server {
 		version,
 		server.WithLogging(),
 		server.WithRecovery(),
+		server.WithToolCapabilities(true),
 	)
 
 	// Register callback to register tools

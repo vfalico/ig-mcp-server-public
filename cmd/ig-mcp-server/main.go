@@ -125,16 +125,20 @@ func main() {
 	if gadgetImages != nil && *gadgetImages != "" {
 		images = strings.Split(*gadgetImages, ",")
 	}
-	if err = registry.Prepare(ctx, images); err != nil {
-		logFatal("failed to prepare tool registry", "error", err)
-	}
 
 	go func() {
 		defer stop()
-		if err = srv.Start(*transport, *transportHost, *transportPort); err != nil {
-			log.Error("failed to start server", "error", err)
+		if startErr := srv.Start(*transport, *transportHost, *transportPort); startErr != nil {
+			log.Error("failed to start server", "error", startErr)
 		}
 	}()
+
+	// Gadget metadata can take longer than an MCP client's initialization
+	// deadline on a cold daemon. Start the protocol transport first; SetTools
+	// advertises the completed registry through tools/list_changed.
+	if prepareErr := registry.Prepare(ctx, images); prepareErr != nil {
+		logFatal("failed to prepare tool registry", "error", prepareErr)
+	}
 
 	<-ctx.Done()
 	log.Info("Received shutdown signal, shutting down server")
