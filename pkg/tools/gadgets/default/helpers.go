@@ -9,7 +9,9 @@ import (
 func defaultParamsFromGadgetInfo(info *api.GadgetInfo) map[string]string {
 	params := make(map[string]string)
 	for _, p := range info.Params {
-		params[p.Prefix+p.Key] = p.DefaultValue
+		if p.DefaultValue != "" {
+			params[p.Prefix+p.Key] = p.DefaultValue
+		}
 	}
 	return params
 }

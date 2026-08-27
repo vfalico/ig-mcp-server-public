@@ -47,12 +47,8 @@ func gadgetHandler(mgr gadgetmanager.GadgetManager, info *api.GadgetInfo) server
 			}
 			// If params is provided, merge it with the default parameters
 			if p, ok := args["params"].(map[string]interface{}); ok {
-				for k, v := range p {
-					if strVal, ok := v.(string); ok {
-						params[k] = strVal
-					} else {
-						return nil, fmt.Errorf("invalid type for parameter %s: expected string, got %T", k, v)
-					}
+				if err := mergeStringParams(params, p); err != nil {
+					return nil, err
 				}
 			}
 		}
@@ -72,4 +68,20 @@ func gadgetHandler(mgr gadgetmanager.GadgetManager, info *api.GadgetInfo) server
 		}
 		return mcp.NewToolResultText(resp), nil
 	}
+}
+
+func mergeStringParams(params map[string]string, supplied map[string]interface{}) error {
+	for k, v := range supplied {
+		strVal, ok := v.(string)
+		if !ok {
+			return fmt.Errorf("invalid type for parameter %s: expected string, got %T", k, v)
+		}
+		// Some MCP clients materialize omitted optional string properties as
+		// "". Keep those omitted so inactive operators do not receive invalid
+		// explicit values.
+		if strVal != "" {
+			params[k] = strVal
+		}
+	}
+	return nil
 }
